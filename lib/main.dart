@@ -1,4 +1,9 @@
+import 'dart:io';
+
+import 'package:dio/adapter.dart';
 import 'package:flutter/material.dart';
+import 'package:dio/dio.dart';
+import 'package:pactindo_flutter_task_1/model/passenggers_data.dart';
 
 void main() {
   runApp(MyApp());
@@ -46,23 +51,54 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  List<String> items = ['Example Text 0', ];
+  int currentPage = 0;
+  late List<Data> data;
+  List<Map> items = [];
   bool isLoading = false;
+  bool rmItem = true;
 
-  Future _loadData() async {
-    // perform fetching data delay
+  Future _loadDataWithDio() async {
     await new Future.delayed(new Duration(milliseconds: 300));
+    PassenggersData passenggersData;
+    try {
+      Response response;
+      var options = BaseOptions(
+        baseUrl: 'https://api.instantwebtools.net/v1',
+        connectTimeout: 5000,
+        receiveTimeout: 3000,
+      );
+      Dio dio = Dio(options);
+      (dio.httpClientAdapter as DefaultHttpClientAdapter).onHttpClientCreate =
+          (HttpClient client) {
+        client.badCertificateCallback =
+            (X509Certificate cert, String host, int port) => true;
+        return client;
+      };
+      response = await dio.get('/passenger?page=$currentPage&size=10');
+      passenggersData = PassenggersData.fromJson(response.data);
+      setState(() {
+        passenggersData.data.forEach((element) {
+          var item = {
+            'name': element.name,
+            'airlinesCountry': element.airline[0].country,
+            'airlinesName': element.airline[0].name
+          };
+          items.add(item);
+        });
+        isLoading = false;
+      });
+    } catch (e) {
+      print('CATCH ERROR');
+      print(e);
+    }
+    currentPage++;
+  }
 
-    print("load more");
-    // update data and loading status
-    setState(() {
-      for(int i = 0; i < 10; i++){
-        String txt = 'Example Text ' + items.length.toString();
-        items.add(txt);
-        // items.addAll( [txt]);
-      }
-      isLoading = false;
-    });
+  @override
+  void initState() {
+    super.initState();
+    _loadDataWithDio();
+    // WidgetsBinding.instance!.addPostFrameCallback((_) => _loadDataWithDio());
   }
 
   @override
@@ -73,12 +109,14 @@ class _MyHomePageState extends State<MyHomePage> {
       ),
       body: Column(
         children: <Widget>[
+          Container(),
           Expanded(
             child: NotificationListener<ScrollNotification>(
               onNotification: (ScrollNotification scrollInfo) {
-                if (!isLoading && scrollInfo.metrics.pixels ==
-                    scrollInfo.metrics.maxScrollExtent) {
-                  _loadData();
+                if (!isLoading &&
+                    scrollInfo.metrics.pixels ==
+                        scrollInfo.metrics.maxScrollExtent) {
+                  _loadDataWithDio();
                   // start loading data
                   setState(() {
                     isLoading = true;
@@ -90,7 +128,9 @@ class _MyHomePageState extends State<MyHomePage> {
                 itemCount: items.length,
                 itemBuilder: (context, index) {
                   return ListTile(
-                    title: Text('${items[index]}'),
+                    title: Text('${items[index]['name']}'),
+                    subtitle: Text('${items[index]['airlinesCountry']}'),
+                    trailing: Text('${items[index]['airlinesName']}'),
                   );
                 },
               ),
